@@ -9,7 +9,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'dva.settings')
 
 from django.conf import settings  # noqa
 
-app = Celery('dva')
+app = Celery('dva', backend='amqp', broker='amqp://guest:guest@localhost:5672//')
 
 # Using a string here means the worker will not have to
 # pickle the object when using Windows.

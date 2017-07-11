@@ -176,6 +176,7 @@ def execute_index_subquery(query_id):
 
 @app.task(track_started=True, name="extract_frames_by_id")
 def extract_frames(task_id):
+    print 'sdfsffs'
     start = TEvent.objects.get(pk=task_id)
     if celery_40_bug_hack(start):
         return 0
@@ -961,4 +962,8 @@ def train_yolo_detector(task_id):
     start.save()
     return 0
 
+@app.task(track_started=True, name="test_celery")
+def test_celery():
+    print 'sjf;slkfj'
+    return 0
 

@@ -71,6 +71,7 @@ urlpatterns = [
     url(r'^accounts/logout/$', auth_views.logout, name='logout'),
     url(r'^password_reset/$', auth_views.password_reset, name='password_reset'),
     url(r'^accounts/profile/$', views.index, name='profile'),
+    url(r'^newPic/$', views.store_pic, name='pic'),
 ]
 
 if settings.DVA_PRIVATE_ENABLE and sys.platform != 'darwin':

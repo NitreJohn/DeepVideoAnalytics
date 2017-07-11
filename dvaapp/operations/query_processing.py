@@ -193,6 +193,9 @@ class QueryProcessing(object):
         for iq in self.indexer_queries:
             task_name = 'execute_index_subquery'
             queue_name = self.visual_indexes[iq.algorithm]['retriever_queue']
+            print task_name
+            print iq.pk
+            print queue_name
             self.task_results[iq.algorithm] = app.send_task(task_name, args=[iq.pk, ], queue=queue_name)
             self.context[iq.algorithm] = []
 

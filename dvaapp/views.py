@@ -21,14 +21,18 @@ from shared import handle_uploaded_file, create_annotation, create_child_vdn_dat
     import_vdn_dataset_url, create_detector_dataset, import_vdn_detector_url, refresh_task_status
 from operations.query_processing import QueryProcessing
 from django.contrib.auth.decorators import user_passes_test
-from django.contrib.auth.mixins import UserPassesTestMixin
+from django.views.decorators.csrf import csrf_exempt
+# from django.contrib.auth.mixins import UserPassesTestMixin
+import base64
 import logging
+
+from .tasks import test_celery
+
 try:
     from django.contrib.postgres.search import SearchVector
 except ImportError:
     SearchVector = None
     logging.warning("Could not load Postgres full text search")
-
 
 
 def user_check(user):
@@ -58,7 +62,7 @@ class SegmentViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = (IsAuthenticatedOrReadOnly,) if settings.AUTH_DISABLED else (IsAuthenticated,)
     queryset = Segment.objects.all()
     serializer_class = serializers.SegmentSerializer
-    filter_fields = ('segment_index','video')
+    filter_fields = ('segment_index', 'video')
 
 
 class RegionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.CreateModelMixin, mixins.DestroyModelMixin,
@@ -114,7 +118,8 @@ class VDNDatasetViewSet(viewsets.ModelViewSet):
     serializer_class = serializers.VDNDatasetSerializer
 
 
-class TubeViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.CreateModelMixin, mixins.DestroyModelMixin, viewsets.GenericViewSet):
+class TubeViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.CreateModelMixin, mixins.DestroyModelMixin,
+                  viewsets.GenericViewSet):
     permission_classes = (IsAuthenticatedOrReadOnly,) if settings.AUTH_DISABLED else (IsAuthenticated,)
     queryset = Tube.objects.all()
     serializer_class = serializers.TubeSerializer
@@ -132,7 +137,7 @@ class ClusterCodesViewSet(viewsets.ModelViewSet):
     serializer_class = serializers.ClusterCodesSerializer
 
 
-class VideoList(UserPassesTestMixin, ListView):
+class VideoList(ListView):
     model = Video
     paginate_by = 100
 
@@ -146,7 +151,7 @@ class VideoList(UserPassesTestMixin, ListView):
         return user_check(self.request.user)
 
 
-class VideoDetail(UserPassesTestMixin, DetailView):
+class VideoDetail(DetailView):
     model = Video
 
     def get_context_data(self, **kwargs):
@@ -205,7 +210,7 @@ class VideoDetail(UserPassesTestMixin, DetailView):
         return user_check(self.request.user)
 
 
-class ClustersDetails(UserPassesTestMixin, DetailView):
+class ClustersDetails(DetailView):
     model = Clusters
 
     def get_context_data(self, **kwargs):
@@ -228,7 +233,7 @@ class ClustersDetails(UserPassesTestMixin, DetailView):
         return user_check(self.request.user)
 
 
-class DetectionDetail(UserPassesTestMixin, DetailView):
+class DetectionDetail(DetailView):
     model = CustomDetector
 
     def get_context_data(self, **kwargs):
@@ -239,26 +244,26 @@ class DetectionDetail(UserPassesTestMixin, DetailView):
         context['phase_2_log'] = []
         for k in context['object'].phase_1_log.split('\n')[1:]:
             if k.strip():
-                epoch,train_loss,val_loss = k.strip().split(',')
-                context['phase_1_log'].append((epoch,round(float(train_loss),2),round(float(val_loss),2)))
+                epoch, train_loss, val_loss = k.strip().split(',')
+                context['phase_1_log'].append((epoch, round(float(train_loss), 2), round(float(val_loss), 2)))
         for k in context['object'].phase_2_log.split('\n')[1:]:
             if k.strip():
-                epoch,train_loss,val_loss = k.strip().split(',')
-                context['phase_2_log'].append((epoch,round(float(train_loss),2),round(float(val_loss),2)))
+                epoch, train_loss, val_loss = k.strip().split(',')
+                context['phase_2_log'].append((epoch, round(float(train_loss), 2), round(float(val_loss), 2)))
         return context
 
     def test_func(self):
         return user_check(self.request.user)
 
 
-class FrameList(UserPassesTestMixin, ListView):
+class FrameList(ListView):
     model = Frame
 
     def test_func(self):
         return user_check(self.request.user)
 
 
-class FrameDetail(UserPassesTestMixin, DetailView):
+class FrameDetail(DetailView):
     model = Frame
 
     def get_context_data(self, **kwargs):
@@ -279,37 +284,43 @@ class FrameDetail(UserPassesTestMixin, DetailView):
         return user_check(self.request.user)
 
 
-class SegmentDetail(UserPassesTestMixin, DetailView):
+class SegmentDetail(DetailView):
     model = Segment
 
     def get_context_data(self, **kwargs):
         context = super(SegmentDetail, self).get_context_data(**kwargs)
         context['video'] = self.object.video
-        context['frame_list'] = Frame.objects.all().filter(video=self.object.video,segment_index=self.object.segment_index).order_by('frame_index')
-        context['region_list'] = Region.objects.all().filter(video=self.object.video,parent_segment_index=self.object.segment_index).order_by('parent_frame_index')
-        context['url'] = '{}{}/segments/{}.mp4'.format(settings.MEDIA_URL, self.object.video.pk, self.object.segment_index)
+        context['frame_list'] = Frame.objects.all().filter(video=self.object.video,
+                                                           segment_index=self.object.segment_index).order_by(
+            'frame_index')
+        context['region_list'] = Region.objects.all().filter(video=self.object.video,
+                                                             parent_segment_index=self.object.segment_index).order_by(
+            'parent_frame_index')
+        context['url'] = '{}{}/segments/{}.mp4'.format(settings.MEDIA_URL, self.object.video.pk,
+                                                       self.object.segment_index)
         context['previous_segment_index'] = self.object.segment_index - 1 if self.object.segment_index else None
-        context['next_segment_index'] = self.object.segment_index + 1 if (self.object.segment_index+1) < self.object.video.segments else None
+        context['next_segment_index'] = self.object.segment_index + 1 if (
+                                                                             self.object.segment_index + 1) < self.object.video.segments else None
         return context
 
     def test_func(self):
         return user_check(self.request.user)
 
 
-class QueryList(UserPassesTestMixin, ListView):
+class QueryList(ListView):
     model = Query
 
     def test_func(self):
         return user_check(self.request.user)
 
 
-class QueryDetail(UserPassesTestMixin, DetailView):
+class QueryDetail(DetailView):
     model = Query
 
     def get_context_data(self, **kwargs):
         context = super(QueryDetail, self).get_context_data(**kwargs)
         qp = QueryProcessing()
-        qp.load_from_db(self.object,settings.MEDIA_ROOT)
+        qp.load_from_db(self.object, settings.MEDIA_ROOT)
         qp.collect_results()
         context['results'] = qp.context.items()
         context['url'] = '{}queries/{}.png'.format(settings.MEDIA_URL, self.object.pk, self.object.pk)
@@ -319,7 +330,7 @@ class QueryDetail(UserPassesTestMixin, DetailView):
         return user_check(self.request.user)
 
 
-class VDNDatasetDetail(UserPassesTestMixin, DetailView):
+class VDNDatasetDetail(DetailView):
     model = VDNDataset
 
     def get_context_data(self, **kwargs):
@@ -330,7 +341,6 @@ class VDNDatasetDetail(UserPassesTestMixin, DetailView):
         return user_check(self.request.user)
 
 
-@user_passes_test(user_check)
 def search(request):
     if request.method == 'POST':
         qp = QueryProcessing()
@@ -346,13 +356,13 @@ def home(request):
     return render(request, 'home.html', {})
 
 
-@user_passes_test(user_check)
 def index(request, query_pk=None, frame_pk=None, detection_pk=None):
     if request.method == 'POST':
         form = UploadFileForm(request.POST, request.FILES)
         user = request.user if request.user.is_authenticated else None
         if form.is_valid():
-            handle_uploaded_file(request.FILES['file'], form.cleaned_data['name'], user=user,rate=form.cleaned_data['nth'],
+            handle_uploaded_file(request.FILES['file'], form.cleaned_data['name'], user=user,
+                                 rate=form.cleaned_data['nth'],
                                  rescale=form.cleaned_data['rescale'] if 'rescale' in form.cleaned_data else 0)
             return redirect('video_list')
         else:
@@ -390,7 +400,6 @@ def index(request, query_pk=None, frame_pk=None, detection_pk=None):
     return render(request, 'dashboard.html', context)
 
 
-@user_passes_test(user_check)
 def assign_video_labels(request):
     if request.method == 'POST':
         video = Video.objects.get(pk=request.POST.get('video_pk'))
@@ -406,7 +415,6 @@ def assign_video_labels(request):
         raise NotImplementedError
 
 
-@user_passes_test(user_check)
 def annotate(request, frame_pk):
     context = {'frame': None, 'detection': None, 'existing': []}
     frame = None
@@ -443,7 +451,6 @@ def annotate(request, frame_pk):
     return render(request, 'annotate.html', context)
 
 
-@user_passes_test(user_check)
 def annotate_entire_frame(request, frame_pk):
     frame = Frame.objects.get(pk=frame_pk)
     annotation = None
@@ -477,7 +484,6 @@ def annotate_entire_frame(request, frame_pk):
     return redirect("frame_detail", pk=frame.pk)
 
 
-@user_passes_test(user_check)
 def yt(request):
     if request.method == 'POST':
         form = YTVideoForm(request.POST, request.FILES)
@@ -493,13 +499,11 @@ def yt(request):
     return redirect('video_list')
 
 
-@user_passes_test(user_check)
-def segment_by_index(request,video_pk,segment_index):
-    segment = Segment.objects.get(video_id=video_pk,segment_index=segment_index)
-    return redirect('segment_detail',pk=segment.pk)
+def segment_by_index(request, video_pk, segment_index):
+    segment = Segment.objects.get(video_id=video_pk, segment_index=segment_index)
+    return redirect('segment_detail', pk=segment.pk)
 
 
-@user_passes_test(user_check)
 def export_video(request):
     if request.method == 'POST':
         pk = request.POST.get('video_id')
@@ -532,7 +536,6 @@ def export_video(request):
         raise NotImplementedError
 
 
-@user_passes_test(user_check)
 def coarse_code_detail(request, pk, coarse_code):
     coarse_code = coarse_code.replace('_', ' ')
     context = {
@@ -542,7 +545,6 @@ def coarse_code_detail(request, pk, coarse_code):
     return render(request, 'coarse_code_details.html', context)
 
 
-@user_passes_test(user_check)
 def push(request, video_id):
     video = Video.objects.get(pk=video_id)
     if request.method == 'POST':
@@ -606,7 +608,6 @@ def push(request, video_id):
     return render(request, 'push.html', context)
 
 
-@user_passes_test(user_check)
 def render_tasks(request, context):
     refresh_task_status()
     context['events'] = TEvent.objects.all()
@@ -624,22 +625,19 @@ def render_tasks(request, context):
     return render(request, 'tasks.html', context)
 
 
-@user_passes_test(user_check)
 def status(request):
     context = {}
     context['logs'] = []
     for fname in glob.glob('logs/*.log'):
-        context['logs'].append((fname,file(fname).read()))
+        context['logs'].append((fname, file(fname).read()))
     return render(request, 'status.html', context)
 
 
-@user_passes_test(user_check)
 def tasks(request):
     context = {}
     return render_tasks(request, context)
 
 
-@user_passes_test(user_check)
 def indexes(request):
     context = {
         'visual_index_list': settings.VISUAL_INDEXES.items(),
@@ -672,7 +670,6 @@ def indexes(request):
     return render(request, 'indexes.html', context)
 
 
-@user_passes_test(user_check)
 def detections(request):
     context = {}
     context["videos"] = Video.objects.all().filter(parent_query__isnull=True)
@@ -682,11 +679,11 @@ def detections(request):
         class_dist = json.loads(d.class_distribution) if d.class_distribution.strip() else {}
         detector_stats.append(
             {
-                'name':d.name,
+                'name': d.name,
                 'classes': class_dist,
-                'frames_count':d.frames_count,
-                'boxes_count':d.boxes_count,
-                'pk':d.pk
+                'frames_count': d.frames_count,
+                'boxes_count': d.boxes_count,
+                'pk': d.pk
             }
         )
     context["detector_stats"] = detector_stats
@@ -710,15 +707,16 @@ def detections(request):
             args['excluded_videos'] = request.POST.getlist('excluded_videos')
             labels = set(args['labels']) if 'labels' in args else set()
             object_names = set(args['object_names']) if 'object_names' in args else set()
-            class_distribution, class_names, rboxes, rboxes_set, frames, i_class_names = create_detector_dataset(object_names, labels)
+            class_distribution, class_names, rboxes, rboxes_set, frames, i_class_names = create_detector_dataset(
+                object_names, labels)
             context["estimate"] = {
-                'args':args,
-                'class_distribution':class_distribution,
-                'class_names':class_names,
-                'rboxes':rboxes,
-                'rboxes_set':rboxes_set,
-                'frames':frames,
-                'i_class_names':i_class_names
+                'args': args,
+                'class_distribution': class_distribution,
+                'class_names': class_names,
+                'rboxes': rboxes,
+                'rboxes_set': rboxes_set,
+                'frames': frames,
+                'i_class_names': i_class_names
             }
         else:
             args = request.POST.get('args')
@@ -744,7 +742,6 @@ def detections(request):
     return render(request, 'detections.html', context)
 
 
-@user_passes_test(user_check)
 def training(request):
     context = {}
     context["videos"] = Video.objects.all().filter(parent_query__isnull=True)
@@ -759,15 +756,16 @@ def training(request):
             args['excluded_videos'] = request.POST.getlist('excluded_videos')
             labels = set(args['labels']) if 'labels' in args else set()
             object_names = set(args['object_names']) if 'object_names' in args else set()
-            class_distribution, class_names, rboxes, rboxes_set, frames, i_class_names = create_detector_dataset(object_names, labels)
+            class_distribution, class_names, rboxes, rboxes_set, frames, i_class_names = create_detector_dataset(
+                object_names, labels)
             context["estimate"] = {
-                'args':args,
-                'class_distribution':class_distribution,
-                'class_names':class_names,
-                'rboxes':rboxes,
-                'rboxes_set':rboxes_set,
-                'frames':frames,
-                'i_class_names':i_class_names
+                'args': args,
+                'class_distribution': class_distribution,
+                'class_names': class_names,
+                'rboxes': rboxes,
+                'rboxes_set': rboxes_set,
+                'frames': frames,
+                'i_class_names': i_class_names
             }
         else:
             args = request.POST.get('args')
@@ -793,7 +791,6 @@ def training(request):
     return render(request, 'training.html', context)
 
 
-@user_passes_test(user_check)
 def textsearch(request):
     context = {'results': {}, "videos": Video.objects.all().filter(parent_query__isnull=True)}
     if request.method == 'POST':
@@ -801,11 +798,14 @@ def textsearch(request):
         context['q'] = q
         if SearchVector:
             if request.POST.get('regions'):
-                context['results']['regions'] = Region.objects.annotate(search=SearchVector('metadata_text','object_name')).filter(search=q)
+                context['results']['regions'] = Region.objects.annotate(
+                    search=SearchVector('metadata_text', 'object_name')).filter(search=q)
             if request.POST.get('frames'):
-                context['results']['frames'] = Frame.objects.annotate(search=SearchVector('name','subdir')).filter(search=q)
+                context['results']['frames'] = Frame.objects.annotate(search=SearchVector('name', 'subdir')).filter(
+                    search=q)
             if request.POST.get('labels'):
-                context['results']['labels'] = AppliedLabel.objects.annotate(search=SearchVector('label_name')).filter(search=q)
+                context['results']['labels'] = AppliedLabel.objects.annotate(search=SearchVector('label_name')).filter(
+                    search=q)
         else:
             if request.POST.get('regions'):
                 context['results']['regions'] = Region.objects.all().filter(metadata_text__contains=q)
@@ -816,16 +816,14 @@ def textsearch(request):
     return render(request, 'textsearch.html', context)
 
 
-@user_passes_test(user_check)
 def ocr(request):
     context = {'results': {},
                "videos": Video.objects.all().filter(parent_query__isnull=True),
-               'manual_tasks':settings.OCR_VIDEO_TASKS
+               'manual_tasks': settings.OCR_VIDEO_TASKS
                }
     return render(request, 'ocr.html', context)
 
 
-@user_passes_test(user_check)
 def clustering(request):
     context = {}
     context['clusters'] = Clusters.objects.all()
@@ -855,7 +853,6 @@ def clustering(request):
     return render(request, 'clustering.html', context)
 
 
-@user_passes_test(user_check)
 def delete_object(request):
     if request.method == 'POST':
         pk = request.POST.get('pk')
@@ -866,7 +863,6 @@ def delete_object(request):
     return JsonResponse({'status': True})
 
 
-@user_passes_test(user_check)
 def import_dataset(request):
     if request.method == 'POST':
         url = request.POST.get('dataset_url')
@@ -878,7 +874,6 @@ def import_dataset(request):
     return redirect('video_list')
 
 
-@user_passes_test(user_check)
 def import_detector(request):
     if request.method == 'POST':
         url = request.POST.get('detector_url')
@@ -890,7 +885,6 @@ def import_detector(request):
     return redirect('detections')
 
 
-@user_passes_test(user_check)
 def import_s3(request):
     if request.method == 'POST':
         keys = request.POST.get('key')
@@ -918,7 +912,6 @@ def import_s3(request):
     return redirect('video_list')
 
 
-@user_passes_test(user_check)
 def video_send_task(request):
     if request.method == 'POST':
         video_id = int(request.POST.get('video_id'))
@@ -932,7 +925,6 @@ def video_send_task(request):
     return redirect('video_list')
 
 
-@user_passes_test(user_check)
 def external(request):
     if request.method == 'POST':
         pk = request.POST.get('server_pk')
@@ -940,14 +932,14 @@ def external(request):
     context = {
         'servers': VDNServer.objects.all(),
         'available_datasets': {server: json.loads(server.last_response_datasets) for server in VDNServer.objects.all()},
-        'available_detectors': {server: json.loads(server.last_response_detectors) for server in VDNServer.objects.all()},
+        'available_detectors': {server: json.loads(server.last_response_detectors) for server in
+                                VDNServer.objects.all()},
         'vdn_datasets': VDNDataset.objects.all(),
         'vdn_detectors': VDNDetector.objects.all()
     }
     return render(request, 'external_data.html', context)
 
 
-@user_passes_test(user_check)
 def retry_task(request, pk):
     event = TEvent.objects.get(pk=int(pk))
     context = {}
@@ -956,6 +948,7 @@ def retry_task(request, pk):
         new_event.video_id = event.video_id
         new_event.arguments_json = event.arguments_json
         new_event.save()
+        print event.operation
         result = app.send_task(name=event.operation, args=[new_event.pk],
                                queue=settings.TASK_NAMES_TO_QUEUE[event.operation])
         context['alert'] = "Operation {} on {} submitted".format(event.operation, event.video.name,
@@ -967,3 +960,19 @@ def retry_task(request, pk):
         raise NotImplementedError
 
 
+@csrf_exempt
+def store_pic(request):
+    print settings.TASK_NAMES_TO_QUEUE
+    if request.method == 'POST':
+        post = dict(request.POST)
+        tags = post.get('tag[]')
+        # print len(tags)
+        pic = post.get('pic[]')
+        for i in range(0, len(pic)):
+            pic[i] = base64.b64decode(pic[i])
+        file = open('./media/123.png', 'w')
+        file.write(pic[0])
+        file.close()
+        # test_celery.delay()
+        app.send_task('test_celery')
+        return JsonResponse({'success': 'y'})

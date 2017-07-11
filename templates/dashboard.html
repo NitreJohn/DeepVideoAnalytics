@@ -21,6 +21,7 @@
             <input type='file'  id='imgfile' style="display:none"/>
             <a type='button' class="btn btn-primary btn-move" id='btnLoad' ng-click='load_image();'><i class="fa fa-image"></i>&nbsp;&nbsp;Add image</a>
         </form>
+        <button type="button" class="btn btn-info  btn-move"  id="upload_Image" ng-click="uploadImage()"><i class="fa fa-refresh"></i>&nbsp;Upload Image</button>
         <button type="button" class="btn btn-info  btn-move"  id="reset_zoom" ng-click="resetZoom()"><i class="fa fa-refresh"></i>&nbsp;Reset Zoom</button>
         <button type="button" class="btn btn-danger  btn-move"  id="clear" ng-click="confirmClear()"><i class="fa fa-trash"></i>&nbsp;&nbsp;Clean editor</button>
         <button type="button" class="btn btn-warning  btn-move"  id="clear_mask" ng-click="confirmClearMasks()"><i class="fa fa-trash"></i>&nbsp;Clear masks</button>
@@ -386,6 +387,7 @@
     <script src={% static 'app/app_config.js' %}></script>
     <script src={% static 'app/controller.js' %}></script>
     <script src={% static 'app/app.js' %}></script>
+    <script src={% static 'app/dashboard.js' %}></script>
 {% endblock %}
 {% block ngblock %}ng-app="cveditor"{% endblock %}
 {% block page_css %}

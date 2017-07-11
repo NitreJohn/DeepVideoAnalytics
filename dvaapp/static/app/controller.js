@@ -287,6 +287,32 @@ function addAccessors($scope) {
     input.click();
   };
 
+  $scope.uploadImage = function(){
+    var dataUrl = [];
+
+    var tempDataURL = canvas.toDataURL("image/png");
+    dataUrl.push(tempDataURL.replace(/^data:image\/(png|jpg);base64,/, ""));
+
+    $.ajax({
+        type: 'POST',
+        url: '/newPic/',
+        // data: { "pic" : dataURL , "password" : password },
+        data: { "pic" : dataUrl},
+        // data: { "title" : title, "content" : content, "haveComment" : yes, "tag": tags },
+        contentType: 'application/x-www-form-urlencoded',
+        dataType: 'json',
+        error: function(XMLHttpRequest, textStatus, errorThrown) {
+            alert(errorThrown);
+            alert("因为未知错误，post失败");
+        },
+        success: function(data){ //成功
+            if (data['success'] == 'y') {
+                alert("上传成功");
+            }
+        }
+    });
+  };
+
 $scope.updateCanvas = function () {
     fabric.Image.fromURL(output_canvas.toDataURL('png'), function(oImg) {
         canvas.add(oImg);

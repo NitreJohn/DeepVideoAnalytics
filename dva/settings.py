@@ -78,7 +78,7 @@ INSTALLED_APPS = [
                      'django_filters',
                      'vdnapp',
                      'crispy_forms',
-                     'rest_framework.authtoken'
+                     'rest_framework.authtoken',
                  ] + (['dvap', ] if DVA_PRIVATE_ENABLE else [])+ (['debug_toolbar','explorer',] if MACOS and DEBUG else [])
 
 if VDN_ENABLE:
@@ -161,8 +161,8 @@ elif sys.platform == 'darwin':
         'default': {
             'ENGINE': 'django.db.backends.postgresql_psycopg2',
             'NAME': 'postgres',
-            'USER': 'postgres',
-            'PASSWORD': '',
+            'USER': 'NitreExplosion',
+            'PASSWORD': '12345',
             'HOST': 'localhost',
             'PORT': '',
         }
@@ -243,7 +243,7 @@ if HEROKU_DEPLOY:
     MEDIA_ROOT = '/tmp/'
 else:
     STATIC_URL = '/static/'
-    MEDIA_ROOT = '/Users/aub3/media/' if sys.platform == 'darwin' else os.path.join(PROJECT_ROOT, 'media')
+    MEDIA_ROOT = './media/' if sys.platform == 'darwin' else os.path.join(PROJECT_ROOT, 'media')
     MEDIA_URL = '/media/'
     for create_dirname in ['queries', 'exports', 'detectors','indexers','annotators']:
         if not os.path.isdir("{}/{}".format(MEDIA_ROOT, create_dirname)):
