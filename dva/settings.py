@@ -151,10 +151,17 @@ TEMPLATES = [
 # Database
 # https://docs.djangoproject.com/en/1.10/ref/settings/#databases
 if HEROKU_DEPLOY:
-    DATABASES = {}
-    db_from_env = dj_database_url.config(conn_max_age=500)
-    DATABASES['default'] = db_from_env
-    BROKER_URL = os.environ['CLOUDAMQP_URL']
+    BROKER_URL = 'amqp://{}:{}@localhost//'.format('dvauser', 'localpass')
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql_psycopg2',
+            'NAME': 'postgres',
+            'USER': 'NitreExplosion',
+            'PASSWORD': '12345',
+            'HOST': 'localhost',
+            'PORT': '',
+        }
+    }
 elif sys.platform == 'darwin':
     BROKER_URL = 'amqp://{}:{}@localhost//'.format('dvauser', 'localpass')
     DATABASES = {
