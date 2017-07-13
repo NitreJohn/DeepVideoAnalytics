@@ -5,6 +5,8 @@ import requests
 import glob
 import json
 from django.views.generic import ListView, DetailView
+from pyspark.sql import SparkSession
+
 from .forms import UploadFileForm, YTVideoForm, AnnotationForm
 from .models import Video, Frame, Query, QueryResults, TEvent, IndexEntries, VDNDataset, Region, VDNServer, \
     ClusterCodes, Clusters, AppliedLabel, Tube, CustomDetector, VDNDetector, Segment
@@ -963,16 +965,6 @@ def retry_task(request, pk):
 @csrf_exempt
 def store_pic(request):
     print settings.TASK_NAMES_TO_QUEUE
-    if request.method == 'POST':
-        post = dict(request.POST)
-        tags = post.get('tag[]')
-        # print len(tags)
-        pic = post.get('pic[]')
-        for i in range(0, len(pic)):
-            pic[i] = base64.b64decode(pic[i])
-        file = open('./media/123.png', 'w')
-        file.write(pic[0])
-        file.close()
-        # test_celery.delay()
-        app.send_task('test_celery')
-        return JsonResponse({'success': 'y'})
+    spark = SparkSession.builder.appName("com.databricks.spark.avro").getOrCreate()
+    logData = spark.read.format("com.databricks.spark.avro").load('./media/1/video/test_spark/Testv4_8.mkv.avro')
+

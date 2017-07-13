@@ -2,6 +2,8 @@ from __future__ import absolute_import
 import subprocess, sys, shutil, os, glob, time, logging
 import PIL
 from django.conf import settings
+from pyspark.sql import SparkSession
+
 from dva.celery import app
 from .models import Video, Frame, TEvent, Query, IndexEntries, QueryResults, AppliedLabel, VDNDataset, Clusters, \
     ClusterCodes, Region, Tube, CustomDetector, Segment, IndexerQuery
@@ -10,6 +12,7 @@ from .operations.query_processing import IndexerTask,QueryProcessing
 from .operations.detection_processing import DetectorTask
 from .operations.video_processing import WFrame,WVideo
 from dvalib import clustering
+from dvalib import Face_Dectection
 
 from collections import defaultdict
 import calendar
@@ -176,7 +179,6 @@ def execute_index_subquery(query_id):
 
 @app.task(track_started=True, name="extract_frames_by_id")
 def extract_frames(task_id):
-    print 'sdfsffs'
     start = TEvent.objects.get(pk=task_id)
     if celery_40_bug_hack(start):
         return 0
@@ -962,8 +964,13 @@ def train_yolo_detector(task_id):
     start.save()
     return 0
 
-@app.task(track_started=True, name="test_celery")
+@app.task(track_started=True, name="test_face_detection")
 def test_celery():
-    print 'sjf;slkfj'
+    spark = SparkSession.builder.appName("com.databricks.spark.avro").getOrCreate()
+    logData = spark.read.format("com.databricks.spark.avro")\
+        .load('./media/2.mkv.avro')
+    vfile = logData.rdd
+    data = vfile.mapPartitions(Face_Dectection.decode_map).filter(lambda x: (x[0] != "None" and x[0] != "audio"))
+    result = data.foreachPartition(Face_Dectection.save_images_map(None))
     return 0
 

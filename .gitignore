@@ -80,3 +80,6 @@ notes/*.mov
 /shared/old_facenet_model/
 *.pyc
 media
+*.jar
+Face_Dectection.py
+FileUtil.py
